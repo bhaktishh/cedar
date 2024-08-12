@@ -42,7 +42,7 @@ pub use partial_response::PartialResponse;
 /// Authorizer
 pub struct Authorizer {
     /// Cedar `Extension`s which will be used during requests to this `Authorizer`
-    extensions: Extensions<'static>,
+    extensions: &'static Extensions<'static>,
     /// Error-handling behavior of this `Authorizer`
     error_handling: ErrorHandling,
 }
@@ -90,7 +90,7 @@ impl Authorizer {
         pset: &PolicySet,
         entities: &Entities,
     ) -> PartialResponse {
-        let eval = Evaluator::new(q.clone(), entities, &self.extensions);
+        let eval = Evaluator::new(q.clone(), entities, self.extensions);
         let mut true_permits = vec![];
         let mut true_forbids = vec![];
         let mut false_permits = vec![];
@@ -273,6 +273,7 @@ mod test {
         .expect("Policy Creation Failed")
     }
 
+    #[cfg(feature = "partial-eval")]
     fn context_pol(id: &str, effect: Effect) -> StaticPolicy {
         let pid = PolicyID::from_string(id);
         StaticPolicy::new(
@@ -309,6 +310,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "partial-eval")]
     fn authorizer_sanity_check_partial_deny() {
         let context = Context::from_expr(
             RestrictedExpr::record([(
@@ -401,6 +403,40 @@ mod test {
             false
         };
         "#;
+
+        pset.add_static(parser::parse_policy(Some(PolicyID::from_string("1")), src1).unwrap())
+            .unwrap();
+        pset.add_static(parser::parse_policy(Some(PolicyID::from_string("2")), src2).unwrap())
+            .unwrap();
+
+        let r = a.is_authorized_core(q.clone(), &pset, &es).decision();
+        assert_eq!(r, Some(Decision::Allow));
+    }
+
+    #[test]
+    #[cfg(feature = "partial-eval")]
+    fn satisfied_permit_no_forbids_unknown() {
+        let q = Request::new(
+            (EntityUID::with_eid("p"), None),
+            (EntityUID::with_eid("a"), None),
+            (EntityUID::with_eid("r"), None),
+            Context::empty(),
+            None::<&RequestSchemaAllPass>,
+            Extensions::none(),
+        )
+        .unwrap();
+        let a = Authorizer::new();
+        let mut pset = PolicySet::new();
+        let es = Entities::new();
+
+        let src1 = r#"
+        permit(principal == test_entity_type::"p",action,resource);
+        "#;
+        let src2 = r#"
+        forbid(principal == test_entity_type::"p",action,resource) when {
+            false
+        };
+        "#;
         let src3 = r#"
         permit(principal == test_entity_type::"p",action,resource) when {
             unknown("test")
@@ -432,6 +468,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "partial-eval")]
     fn satisfied_permit_residual_forbid() {
         let q = Request::new(
             (EntityUID::with_eid("p"), None),
@@ -480,6 +517,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "partial-eval")]
     fn no_permits() {
         let q = Request::new(
             (EntityUID::with_eid("p"), None),
@@ -542,6 +580,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "partial-eval")]
     fn residual_permits() {
         let q = Request::new(
             (EntityUID::with_eid("p"), None),

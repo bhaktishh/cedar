@@ -45,6 +45,7 @@ lazy_static::lazy_static! {
         ipaddr::extension_schema(),
         #[cfg(feature = "decimal")]
         decimal::extension_schema(),
+        #[cfg(feature = "partial-eval")]
         partial_evaluation::extension_schema(),
     ];
 
@@ -109,7 +110,7 @@ fn eval_extension_constructor(
     lit_str_arg: SmolStr,
 ) -> Result<Value, EvaluationError> {
     let exts = Extensions::all_available();
-    let evaluator = RestrictedEvaluator::new(&exts);
+    let evaluator = RestrictedEvaluator::new(exts);
     let constructor_call_expr =
         RestrictedExpr::call_extension_fn(constructor_name, [RestrictedExpr::val(lit_str_arg)]);
     evaluator.interpret(constructor_call_expr.as_borrowed())
